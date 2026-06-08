@@ -1,45 +1,79 @@
+#include "FullyConnectedLayer.hpp"
 #include "Layer.hpp"
 #include "MeanSquared.hpp"
 #include "Model.hpp"
+#include "BinaryCrossEntropy.hpp"
+#include "Sigmoid.hpp"
+#include "labeling_functions.hpp"
 #include <cstdlib>
+#include <vector>
+#include <fstream>
+#include <Relu.hpp>
+#include <algorithm>
 #include <random>
-#include <iostream>
 using namespace mlask;
 
-float w = 0.3;
-float b = 0;
+using float_t = float;
 
-#define SIZE 1000
-#define EPOCHS 10000
+void load_data(std::vector<std::vector<float_t>>& data){
+    std::ifstream file("iris.csv");
+    std::string line;
 
-int main(){
-    std::default_random_engine generator;
-    std::uniform_real_distribution<double> distribution(-0.5,0.5);
-    Model model(1, 1, 1,EPOCHS, true);
-    model.addFullyConnectedLayer<1, 1>();
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
 
-    std::vector<float> Y;
-    Y.resize(SIZE + 1);
-    for(int x = 0;x<=SIZE;x++){
-        Y[x] = w * x + b + distribution(generator);
-    }
+        std::stringstream ss(line);
+        std::string token;
+        std::vector<float> row_features;
 
-    float_t learning_rate = 0.001;
-    for(std::size_t epochs=0; epochs < EPOCHS; epochs++){
-        for(int x = 0;x<=SIZE;x++){
-            model.backprop<DerivedMeanSquared>(vectorIn{{(x-(SIZE/2.f))/(SIZE/2.f)}}, vectorOut{{Y[x]}});
+        for (int i = 0; i < 4; ++i) {
+            std::getline(ss, token, ',');
+            row_features.push_back(std::stof(token) / 5.0f - 1);
         }
-        model.fit(learning_rate);
-    }
-   
-    vectorIn input(SIZE+1);
-    vectorOut expected(SIZE+1);
-    for(int x = 0;x<=SIZE;x++){
-        input(x) =  (x-(SIZE/2.f))/(SIZE/2.f);
-        expected(x) =  w * x + b;
-    }
+        std::getline(ss, token, ',');
+        if (token == "Iris-setosa"){ row_features.push_back(1);}
+        else row_features.push_back(0);
 
-    std::cout<<"Error: "<< model.whole_error<MeanSquared>(input, expected) << std::endl;
-    model.exportToONNX("onnx_format.onnx", "One Neuron Neural Network");
+        data.push_back(row_features);
+    }
 }
 
+int main(){
+    const int epochs = 10000;
+    Model model(4,1,5, epochs, true);
+    model.addLayer<FullyConnectedLayer<4,16>>();
+    model.addLayer<Relu>();
+    model.addLayer<FullyConnectedLayer<16,8>>();
+    model.addLayer<Relu>();
+    model.addLayer<FullyConnectedLayer<8,1>>();
+
+    std::vector<std::vector<float_t>> data;
+
+    load_data(data);
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(data.begin(), data.end(), g);
+    std::vector<std::vector<float_t>> train(data.begin(), data.begin()+130);
+    std::vector<std::vector<float_t>> test(data.begin() + 130, data.end());
+
+    std::vector<float_t> trainY;
+    std::vector<float_t> testY;
+
+    for (auto& row : train) {
+        trainY.push_back(std::move(row.back()));
+        row.pop_back();
+    }
+    for (auto& row : test) {
+        testY.push_back(std::move(row.back()));
+        row.pop_back();
+    }
+
+    model.fit<DerivedBinaryCrossEntropy>(train, trainY, epochs,  0.01f);
+    ConfusionMatrix conf = model.evaluate(test, testY, post_process_sign);
+
+
+    model.exportToONNX("iris_model.onnx", "iris");
+    std::cout<<conf<<std::endl;
+}

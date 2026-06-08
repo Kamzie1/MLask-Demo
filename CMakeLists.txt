@@ -10,7 +10,7 @@ set(ONNX_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(mlask
     GIT_REPOSITORY https://github.com/Kamzie1/MLask.git
-    GIT_TAG 1.0.4
+    GIT_TAG 1.1.0
     GIT_SHALLOW ON
     EXCLUDE_FROM_ALL
     SYSTEM)
@@ -24,4 +24,3 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_executable(demo main.cpp)
 target_compile_features(demo PRIVATE cxx_std_23)
 target_link_libraries(demo PUBLIC mlask)
-
